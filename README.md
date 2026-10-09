@@ -1,308 +1,362 @@
 # 🛡️ CodeSentinel
+### AI-Powered GitHub Pull Request Code Reviewer
 
-**CodeSentinel** is an autonomous AI agent built in Java 21 and Spring Boot 3.x that automatically reviews GitHub Pull Requests, performs PMD/SpotBugs static analysis, identifies security and code health issues, and posts inline review comments and summary verdicts back to GitHub.
+<p align="center">
+  <strong>Review Smarter. Catch Bugs Earlier. Ship Safer Code.</strong>
+</p>
+
+<p align="center">
+  An AI-powered code review agent that analyzes GitHub Pull Requests, identifies potential bugs and security vulnerabilities, and delivers actionable code review feedback using Claude and Java.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-21-orange?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java 21"/>
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot"/>
+  <img src="https://img.shields.io/badge/AI-Claude-blueviolet?style=for-the-badge" alt="Claude AI"/>
+  <img src="https://img.shields.io/badge/LangChain4j-AI%20Agents-1C3C3C?style=for-the-badge" alt="LangChain4j"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
+  <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
+</p>
 
 ---
 
-## 🌟 Architecture & Workflow
+## 📌 Overview
+
+**CodeSentinel** is an AI-powered GitHub Pull Request review system designed to help developers identify potential code problems before merging changes.
+
+It integrates GitHub webhooks with a Java Spring Boot backend and a Claude-powered AI agent to analyze code changes, investigate additional file context, and generate structured findings.
+
+CodeSentinel is designed to support automated review workflows while giving developers control over when feedback is published to GitHub.
+
+### 🎯 The Problem
+
+Manual code reviews can be time-consuming, and important bugs or security concerns may be overlooked during development.
+
+### 💡 The Solution
+
+CodeSentinel automates the initial review process by examining pull request changes, evaluating potential risks, and preparing clear, actionable feedback for developers.
+
+---
+
+## ✨ Key Features
+
+- 🤖 **AI-Powered Code Reviews** — Analyze pull request changes using Claude.
+- 🐛 **Bug Detection** — Identify potential logic errors and correctness issues.
+- 🔐 **Security Analysis** — Look for risks such as SQL injection, unsafe input handling, and hardcoded secrets.
+- 🧠 **Context-Aware Analysis** — Retrieve complete file contents when diffs alone are insufficient.
+- 🧰 **Agent Tools** — Give the AI agent access to pull request diffs, file contents, static analysis, and review-posting operations.
+- 📍 **Inline Review Comments** — Attach actionable findings to relevant changed lines.
+- 📝 **Review Summaries** — Generate an overall verdict and a severity breakdown.
+- 🛡️ **Draft Review Workflow** — Keep reviews in draft mode until explicitly approved.
+- 🗃️ **Review History** — Persist reviews and findings in PostgreSQL.
+- 📂 **File Filtering** — Skip oversized, binary, and lock files.
+- 🔏 **Webhook Verification** — Validate GitHub webhook signatures using HMAC-SHA256.
+- 🐳 **Docker Support** — Run the application and PostgreSQL with Docker Compose.
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as Developer
-    participant GH as GitHub
-    participant Hook as WebhookController
-    participant Svc as ReviewService
-    participant Agent as ReviewAgent (Claude)
-    participant Tools as AgentTools
-    participant DB as PostgreSQL
-    actor Reviewer as Lead Reviewer
-
-    Dev->>GH: Open / Synchronize Pull Request
-    GH->>Hook: POST /api/webhook/github (X-Hub-Signature-256)
-    Hook->>Hook: Verify HMAC-SHA256 signature
-    Hook->>Svc: processPullRequest(repo, prNumber)
-    Svc->>Agent: reviewPullRequest(prompt)
-    loop Up to 10 Tool Steps
-        Agent->>Tools: getPullRequestDiff / getFileContent
-        Tools-->>Agent: Unified diff (skips locks/binaries/>500 lines)
-        Agent->>Tools: runStaticAnalysis
-        Tools-->>Agent: PMD/SpotBugs violations
-    end
-    Agent-->>Svc: Structured ReviewResult (verdict, findings)
-    Svc->>DB: Save Review & Findings (status = DRAFT)
-    Note over Svc,DB: If review.auto-post=false (Default)
-    Reviewer->>Svc: POST /api/reviews/{id}/approve
-    Svc->>GH: Post inline finding comments & summary
-    Svc->>DB: Update Review (status = POSTED)
+flowchart TD
+    A[GitHub Pull Request] --> B[GitHub Webhook]
+    B --> C[Webhook Signature Verification]
+    C --> D[Spring Boot Backend]
+    D --> E[Review Service]
+    E --> F[Claude AI Agent]
+    F --> G[GitHub Diff Tool]
+    F --> H[File Context Tool]
+    F --> I[Static Analysis Tool]
+    G --> J[Structured Findings]
+    H --> J
+    I --> J
+    J --> K[Review Storage]
+    K --> L[(PostgreSQL)]
+    J --> M{Approved to Publish?}
+    M -->|Yes| N[GitHub Inline Comments]
+    M -->|Yes| O[GitHub Summary Comment]
+    M -->|No| P[Draft Review]
 ```
 
 ---
 
-## 🚀 Tech Stack
+## ⚙️ Technology Stack
 
-- **Java**: Version 21 (LTS)
-- **Framework**: Spring Boot 3.3.4 (Web, Spring Data JPA, Validation)
-- **AI Agent Framework**: [LangChain4j](https://github.com/langchain4j/langchain4j) (`langchain4j-anthropic` 0.35.0)
-- **LLM**: Claude via Anthropic API (model: `claude-sonnet-5-5`)
-- **GitHub Integration**: Kohsuke GitHub API (`org.kohsuke:github-api` 1.326)
-- **Database**: PostgreSQL 16 with Hibernate JPA (H2 for local test profile)
-- **Containerization**: Docker & Docker Compose multi-stage build
-
----
-
-## 📁 Package Structure
-
-```
-com.codesentinel
-├── agent
-│   ├── AgentTools.java          # LangChain4j @Tool methods with guardrails
-│   └── ReviewAgent.java         # LangChain4j AiService interface with system prompt
-├── config
-│   ├── AnthropicConfig.java     # Anthropic Claude & ReviewAgent bean configuration
-│   └── GitHubConfig.java        # Kohsuke GitHub client bean configuration
-├── controller
-│   ├── ReviewController.java    # REST API for inspection & review approvals
-│   └── WebhookController.java   # GitHub webhook receiver & HMAC-SHA256 verification
-├── model
-│   ├── Finding.java             # JPA entity for individual code findings
-│   ├── Review.java              # JPA entity for complete pull request review
-│   ├── ReviewFinding.java       # DTO for structured findings
-│   ├── ReviewResult.java        # Structured agent response model
-│   └── Severity.java            # CRITICAL, MAJOR, MINOR enum
-├── repository
-│   └── ReviewRepository.java    # Spring Data JPA repository
-└── service
-    ├── GitHubService.java       # GitHub API integration, diffs & comments
-    ├── ReviewService.java       # Review orchestration, draft & approval flow
-    └── StaticAnalysisService.java # PMD and SpotBugs style rule engine
-```
+| Technology | Purpose |
+|---|---|
+| Java 21 | Backend programming language |
+| Spring Boot 3.x | REST APIs and application framework |
+| Maven | Build and dependency management |
+| LangChain4j | AI agent and tool integration |
+| Claude via Anthropic API | AI-powered code analysis |
+| GitHub API library | Pull request and repository integration |
+| Spring Data JPA | Database persistence |
+| PostgreSQL | Review and finding storage |
+| Docker | Application containerization |
+| Docker Compose | Local application and database orchestration |
+| JUnit and Mockito | Automated testing |
 
 ---
 
-## 🛠️ Agent Tools (`AgentTools`)
+## 📁 Project Structure
 
-Every tool is annotated with LangChain4j `@Tool` and `@P` descriptors so Claude can select and execute them intelligently:
-
-| Tool | Parameters | Description |
-|---|---|---|
-| `getPullRequestDiff` | `repo`, `prNumber` | Fetches changed files, commit metadata, unified diff patches, and notes files skipped per guardrails. |
-| `getFileContent` | `repo`, `path`, `ref` | Fetches full file content at a git ref with 1-based line numbering. Skips files over 500 lines. |
-| `runStaticAnalysis` | `code` | Executes PMD/SpotBugs style static checks for SQL injection, hardcoded secrets, resource leaks, etc. |
-| `postReviewComment` | `repo`, `prNumber`, `file`, `line`, `body` | Adds an inline review comment on a specific line of code. Respects the auto-post guardrail. |
-| `postReviewSummary` | `repo`, `prNumber`, `verdict`, `body` | Posts the overall review summary and verdict to the PR conversation. |
-
----
-
-## 🛡️ Guardrails & Safety Controls
-
-1. **Approval Workflow (`review.auto-post=false` by default)**:
-   - When set to `false`, reviews are saved in PostgreSQL with status **`DRAFT`**. Comments are held back from GitHub until a human triggers `POST /api/reviews/{id}/approve`.
-2. **File Size & Format Exclusions**:
-   - Files exceeding **500 lines** are automatically skipped and noted in the review summary.
-   - Package manager lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Gemfile.lock`, `Cargo.lock`, `go.sum`, etc.) are skipped.
-   - Binary files (`.png`, `.jpg`, `.pdf`, `.jar`, `.class`, `.exe`, etc.) are skipped.
-3. **Execution Loop Protection**:
-   - Tool calling is deterministically bounded to a **maximum of 10 steps** per review session.
-4. **Resilient Error Handling**:
-   - All tool methods catch exceptions and return informative diagnostic text to the model rather than crashing the agent loop.
-5. **Zero Secret Leakage**:
-   - Request and response logging on the Anthropic client is disabled (`logRequests(false)`).
-   - API keys and tokens are never logged or exposed in responses.
-   - Webhook signatures use constant-time `MessageDigest.isEqual` comparison to mitigate timing attacks.
-
----
-
-## 🔑 Environment Variables
-
-| Variable | Description | Required | Default |
-|---|---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | Yes | — |
-| `GITHUB_TOKEN` | GitHub Personal Access Token (classic or fine-grained) | Yes | — |
-| `GITHUB_WEBHOOK_SECRET` | Secret configured on GitHub webhook for HMAC-SHA256 verification | Yes | — |
-| `REVIEW_AUTO_POST` | Set to `true` to immediately post comments; `false` saves as DRAFT | No | `false` |
-| `POSTGRES_DB` | PostgreSQL database name | No | `codesentinel` |
-| `POSTGRES_USER` | PostgreSQL username | No | `codesentinel` |
-| `POSTGRES_PASSWORD` | PostgreSQL password | No | `codesentinel` |
-| `SERVER_PORT` | HTTP port for CodeSentinel application | No | `8080` |
-
-Copy the provided [`.env.example`](file:///.env.example) file to `.env`:
-```bash
-cp .env.example .env
+```text
+CodeSentinel/
+├── src/
+│   ├── main/
+│   │   ├── java/com/codesentinel/
+│   │   │   ├── agent/
+│   │   │   │   ├── ReviewAgent.java
+│   │   │   │   └── AgentTools.java
+│   │   │   ├── config/
+│   │   │   │   ├── AnthropicConfig.java
+│   │   │   │   └── GitHubConfig.java
+│   │   │   ├── controller/
+│   │   │   │   ├── WebhookController.java
+│   │   │   │   └── ReviewController.java
+│   │   │   ├── model/
+│   │   │   │   ├── Review.java
+│   │   │   │   ├── Finding.java
+│   │   │   │   └── Severity.java
+│   │   │   ├── repository/
+│   │   │   │   └── ReviewRepository.java
+│   │   │   ├── service/
+│   │   │   │   ├── GitHubService.java
+│   │   │   │   ├── StaticAnalysisService.java
+│   │   │   │   └── ReviewService.java
+│   │   │   └── CodeSentinelApplication.java
+│   │   └── resources/
+│   │       └── application.yml
+│   └── test/
+├── .env.example
+├── .gitignore
+├── Dockerfile
+├── docker-compose.yml
+├── mvnw
+├── mvnw.cmd
+├── pom.xml
+└── README.md
 ```
 
+*The structure above describes the intended architecture; adjust filenames to match the implementation in your repository.*
+
 ---
 
-## 💻 Local Setup & Execution
+## 🔄 How It Works
+
+1. **Pull Request Event:** GitHub sends a webhook when a pull request is opened or updated.
+2. **Signature Verification:** CodeSentinel verifies `X-Hub-Signature-256` before processing the event.
+3. **Diff Retrieval:** The backend retrieves changed files and their diffs using the GitHub API.
+4. **AI Analysis:** Claude reviews the changes and requests additional context through agent tools when necessary.
+5. **Static Analysis:** The application runs its available static-analysis checks.
+6. **Structured Findings:** Findings include severity, file path, line number, explanation, and suggested fix.
+7. **Draft or Publication:** By default, the review is saved as a draft. An authorized approval action triggers publication.
+8. **Persistence:** Reviews and findings are stored in PostgreSQL.
+9. **Developer Feedback:** Published reviews contain inline comments and an overall summary.
+
+---
+
+## 🚦 Finding Severity
+
+| Severity | Meaning |
+|---|---|
+| 🔴 CRITICAL | A potentially severe security or correctness issue requiring urgent attention |
+| 🟠 MAJOR | A significant bug, risk, or reliability concern |
+| 🟡 MINOR | A lower-impact issue or improvement |
+
+CodeSentinel should report only issues supported by evidence in the code. It should not invent findings when the code appears correct.
+
+---
+
+## 🧰 Agent Tools
+
+| Tool | Responsibility |
+|---|---|
+| `getPullRequestDiff` | Retrieve changed files and pull request diffs |
+| `getFileContent` | Retrieve additional file context |
+| `runStaticAnalysis` | Run supported static-analysis checks |
+| `postReviewComment` | Publish an inline review comment |
+| `postReviewSummary` | Publish the overall review summary |
+
+The agent uses a bounded tool-call loop to prevent uncontrolled tool execution. Individual tool errors should be handled gracefully.
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
-- **Java 21** or later
-- **Maven 3.9+** (or use the included `./mvnw`)
-- **Docker & Docker Compose** (optional, for containerized run)
 
-### 1. Build and Run Tests
+Install the following:
+
+- Java 21
+- Maven 3.9+ or use the included Maven wrapper
+- Docker Desktop with Docker Compose
+- A GitHub account and repository
+- An Anthropic API key
+- A GitHub token with appropriate repository permissions
+
+### 1. Clone the Repository
+
 ```bash
-# Run unit & integration tests
-./mvnw clean test
+git clone https://github.com/dhanushkaran5/Codesentinel.git
+cd Codesentinel
 ```
 
-### 2. Run Locally with Maven
-```bash
-# Set environment variables in your terminal
-export ANTHROPIC_API_KEY="sk-ant-api03-..."
-export GITHUB_TOKEN="ghp_..."
-export GITHUB_WEBHOOK_SECRET="your_webhook_secret_123"
-export REVIEW_AUTO_POST="false"
+### 2. Configure Environment Variables
 
-# Run Spring Boot app
+Create a local `.env` file or configure these variables in your environment, according to the application's configuration.
+
+```env
+ANTHROPIC_API_KEY=your_anthropic_api_key
+GITHUB_TOKEN=your_github_token
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+
+POSTGRES_DB=codesentinel
+POSTGRES_USER=codesentinel
+POSTGRES_PASSWORD=change_me
+
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+Do not commit `.env` or real credentials to GitHub. Keep `.env.example` limited to placeholders.
+
+### 3. Start PostgreSQL and the Application
+
+If Docker Compose is configured to start both services:
+
+```bash
+docker compose up --build
+```
+
+To run the application locally with PostgreSQL in Docker, use the database service configuration and then start Spring Boot:
+
+```bash
 ./mvnw spring-boot:run
 ```
 
-### 3. Run with Docker Compose
-```bash
-# Build and launch both PostgreSQL and CodeSentinel
-docker-compose up --build -d
+On Windows PowerShell:
 
-# View application logs
-docker-compose logs -f app
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+Ensure the active Spring profile and database host match your chosen execution mode. Inside a Docker container, the database host is normally the Compose service name, not `localhost`.
+
+### 4. Run Tests
+
+```bash
+./mvnw test
+```
+
+On Windows:
+
+```powershell
+.\mvnw.cmd test
+```
+
+Build the application:
+
+```bash
+./mvnw clean package
 ```
 
 ---
 
-## 🔗 Connecting a GitHub Webhook
+## 🔗 Connect a GitHub Webhook
 
-### Step 1: Create a GitHub Personal Access Token (PAT)
-1. Go to **GitHub** → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**.
-2. Click **Generate new token (classic)**.
-3. Select scopes:
-   - `repo` (Full control of private repositories, or public repos)
-   - `pull_requests:write` (if using fine-grained PAT)
-4. Copy the generated token into `GITHUB_TOKEN`.
+1. Open your GitHub repository.
+2. Navigate to **Settings → Webhooks → Add webhook**.
+3. Enter your publicly accessible webhook URL:
 
-### Step 2: Configure the Repository Webhook
-1. Navigate to your target repository on GitHub:
-   - **Settings** → **Webhooks** → **Add webhook**.
-2. Set the configuration:
-   - **Payload URL**: `https://your-public-url.com/api/webhook/github`
-   - **Content type**: `application/json`
-   - **Secret**: Enter your secret string (matching `GITHUB_WEBHOOK_SECRET`).
-   - **SSL verification**: Enable SSL verification.
-3. Under **Which events would you like to trigger this webhook?**:
-   - Choose **Let me select individual events**.
-   - Check **Pull requests**.
-   - (Optional) Check **Pings**.
-4. Click **Add webhook**. GitHub will immediately send a `ping` event. CodeSentinel will verify the signature and respond with `200 OK` (`{"status": "pong"}`).
+   ```text
+   https://YOUR-DOMAIN/api/webhook/github
+   ```
 
-### Step 3: Local Webhook Forwarding (for Development)
-If running locally behind NAT, use [smee.io](https://smee.io/) or [ngrok](https://ngrok.com/):
-```bash
-# Using smee.io:
-npm install --global smee-client
-smee -u https://smee.io/YOUR_SMEE_CHANNEL -t http://localhost:8080/api/webhook/github
+4. Set the content type to `application/json`.
+5. Enter a webhook secret matching `GITHUB_WEBHOOK_SECRET`.
+6. Select the **Pull requests** event.
+7. Save the webhook.
 
-# Or using ngrok:
-ngrok http 8080
-# Set Payload URL to: https://<ngrok-id>.ngrok-free.app/api/webhook/github
-```
+The endpoint should process the `opened` and `synchronize` actions and safely ignore unrelated actions. GitHub must be able to reach your deployed endpoint; `localhost` alone is not publicly accessible.
 
 ---
 
-## 📡 REST API Reference
+## 🔌 API Endpoints
 
-### 1. GitHub Webhook Receiver
-- **Endpoint**: `POST /api/webhook/github`
-- **Headers**:
-  - `X-Hub-Signature-256`: `sha256=<hmac_hex>`
-  - `X-GitHub-Event`: `pull_request` or `ping`
-- **Response**:
-  ```json
-  {
-    "status": "accepted",
-    "repository": "octocat/Hello-World",
-    "prNumber": 42,
-    "action": "opened",
-    "reviewId": 1,
-    "reviewStatus": "DRAFT",
-    "message": "Pull request review processed. Status: DRAFT"
-  }
-  ```
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/webhook/github` | Receive and verify GitHub webhook events |
+| `GET` | `/api/reviews` | Retrieve saved reviews |
+| `GET` | `/api/reviews/{id}` | Retrieve a review and its findings |
+| `POST` | `/api/reviews/{id}/approve` | Approve a draft and publish its comments |
 
-### 2. Approve a Draft Review
-- **Endpoint**: `POST /api/reviews/{id}/approve`
-- **Description**: Posts all findings as inline comments and the overall review summary to GitHub, then marks the review as `POSTED`.
-- **Response**:
-  ```json
-  {
-    "status": "success",
-    "message": "Review approved and posted to GitHub successfully",
-    "reviewId": 1,
-    "repository": "octocat/Hello-World",
-    "prNumber": 42,
-    "reviewStatus": "POSTED",
-    "findingsCount": 2
-  }
-  ```
+Example requests:
 
-### 3. List All Reviews
-- **Endpoint**: `GET /api/reviews`
-- **Query Parameters**:
-  - `repository` (optional): Filter by repository name
-  - `status` (optional): Filter by `DRAFT` or `POSTED`
-- **Response**:
-  ```json
-  [
-    {
-      "id": 1,
-      "repository": "octocat/Hello-World",
-      "prNumber": 42,
-      "commitSha": "6dcb09b5b57875f334f61aebed695e2e4193db5e",
-      "verdict": "CHANGES_REQUESTED",
-      "summary": "Found 1 critical SQL injection and 1 missing test case.",
-      "status": "DRAFT",
-      "skippedFiles": "package-lock.json",
-      "createdAt": "2026-10-07T22:00:00",
-      "postedAt": null,
-      "findings": [
-        {
-          "id": 1,
-          "file": "src/main/UserService.java",
-          "line": 16,
-          "severity": "CRITICAL",
-          "explanation": "Direct string concatenation into SQL query produces SQL Injection.",
-          "suggestedFix": "query.setParameter(\"username\", username);"
-        }
-      ]
-    }
-  ]
-  ```
-
-### 4. Get Review by ID
-- **Endpoint**: `GET /api/reviews/{id}`
-- **Response**: Returns the complete review object with findings list.
-
----
-
-## 🧪 Testing with cURL
-
-### Test Webhook Signature (Valid Payload):
 ```bash
-PAYLOAD='{"action":"opened","pull_request":{"number":42,"title":"Test PR"},"repository":{"full_name":"octocat/Hello-World"}}'
-SECRET="test_secret_123"
-SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
-
-curl -X POST http://localhost:8080/api/webhook/github \
-  -H "Content-Type: application/json" \
-  -H "X-GitHub-Event: pull_request" \
-  -H "X-Hub-Signature-256: sha256=$SIGNATURE" \
-  -d "$PAYLOAD"
+curl http://localhost:8080/api/reviews
 ```
 
-### Approve Review #1:
+```bash
+curl http://localhost:8080/api/reviews/1
+```
+
 ```bash
 curl -X POST http://localhost:8080/api/reviews/1/approve
 ```
 
-### List Reviews:
-```bash
-curl -X GET http://localhost:8080/api/reviews
-```
+The approval endpoint should be protected against unauthorized use before exposing the application publicly.
+
+---
+
+## 🛡️ Security Practices
+
+- Verify webhook signatures using HMAC-SHA256 and constant-time comparison.
+- Store API keys, tokens, and database passwords in environment variables or a secret manager.
+- Never log credentials.
+- Treat pull request content as untrusted input.
+- Do not execute untrusted pull request code on the application host.
+- Skip binary, lock, and oversized files.
+- Keep automatic posting disabled by default.
+- Validate GitHub repository names, pull request numbers, file paths, and comment locations.
+- Protect review approval endpoints with appropriate authentication and authorization.
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Define the Java and Spring Boot architecture
+- [x] Plan GitHub webhook integration
+- [x] Design the AI review agent and tool interfaces
+- [ ] Complete webhook signature verification and tests
+- [ ] Complete GitHub diff and file retrieval
+- [ ] Integrate Claude using LangChain4j
+- [ ] Implement structured findings and static analysis
+- [ ] Complete draft and approval workflows
+- [ ] Persist reviews and findings in PostgreSQL
+- [ ] Complete integration tests and deployment documentation
+- [ ] Add configurable review policies and repository-specific rules
+
+*Update these checkboxes as each feature is implemented and verified.*
+
+---
+
+## 🎯 Project Goals
+
+CodeSentinel aims to make code reviews more consistent, improve developer productivity, surface potential security problems earlier, and help teams maintain reliable software development workflows.
+
+It is designed as a practical demonstration of Java backend engineering, AI-agent integration, GitHub automation, REST API design, and database persistence.
+
+---
+
+## 👨‍💻 Author
+
+**Dhanushkaran M**
+
+GitHub: [@dhanushkaran5](https://github.com/dhanushkaran5)
+
+---
+
+<p align="center">
+  <strong>🛡️ CodeSentinel — Catch Issues Early. Review with Confidence.</strong>
+</p>
