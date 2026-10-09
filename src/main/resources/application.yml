@@ -1,0 +1,33 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: codesentinel
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:codesentinel}
+    username: ${DB_USER:codesentinel}
+    password: ${DB_PASSWORD:codesentinel}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+# CodeSentinel Configuration
+github:
+  token: ${GITHUB_TOKEN:}
+  webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY:}
+  model-name: ${ANTHROPIC_MODEL:claude-sonnet-5-5}
+
+review:
+  auto-post: ${REVIEW_AUTO_POST:false}

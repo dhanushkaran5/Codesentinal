@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codesentinel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-codesentinel}
+      POSTGRES_USER: ${POSTGRES_USER:-codesentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codesentinel}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codesentinel} -d ${POSTGRES_DB:-codesentinel}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codesentinel-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-codesentinel}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-codesentinel}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-codesentinel}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      REVIEW_AUTO_POST: ${REVIEW_AUTO_POST:-false}
+
+volumes:
+  postgres_data:
+    name: codesentinel-postgres-data
